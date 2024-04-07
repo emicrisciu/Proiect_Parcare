@@ -19,9 +19,9 @@ float durationIn, distanceIn; // variabile utilizate pentru a colecta măsurator
 float durationOut, distanceOut;
 int simultan = 0; // flag folosit pentru a indica prezența unei situații când două mașini doresc utilizarea barierei simultan
 
-float previousDistance = 0; // variabilă folosită la verificarea îndepărtării unei mașini față de senzor, ce reține măsurătoarea anterioară
-int movementsCounter = 5; // contor ce indică numărul de "îndepărtări" ale mașinii față de senzor
 float thresholdDistance = 1; // distanță în cm ce reprezintă pragul minim de deplasare a unei mașini pentru ca ea să fie considerată o îndepărtare
+int entryDistance = 10;
+int farThreshold = 20;
 
 // funcția setup, în care se configurează pinii digitali
 void setup() {
@@ -83,9 +83,9 @@ void loop() {
     Serial.println(distanceOut);
 
     // verificăm dacă se dorește ridicarea barierei
-    if(distanceIn < 10 || distanceOut < 10)
+    if(distanceIn < entryDistance || distanceOut < entryDistance)
     {
-      if(distanceOut < 10) // tratăm cazul în care o mașină dorește să iasă din parcare
+      if(distanceOut < entryDistance) // tratăm cazul în care o mașină dorește să iasă din parcare
       {
         int time = 10;
         while (time < 700)  // timp de 700ms verificăm dacă pe partea cealaltă nu se dorește simultan intrarea în parcare
@@ -102,7 +102,7 @@ void loop() {
           Serial.print("Distance IN: ");
           Serial.println(distanceIn);
 
-          if (distanceIn < 10)  // dacă există în același timp o mașină pe partea opusă a barierei,
+          if (distanceIn < entryDistance)  // dacă există în același timp o mașină pe partea opusă a barierei,
           {
             // atunci vom începe secvența de verificare a îndepărtării mașinii de la intrare, calculând distanța la care se află
             digitalWrite(trigPinIn, LOW);
@@ -116,9 +116,7 @@ void loop() {
             Serial.print("Distance IN: ");
             Serial.println(distanceIn);
 
-            previousDistance = distanceIn;
-            movementsCounter = 5;
-            while (movementsCounter != 0) // cât timp mașina este în curs de îndepărtare,
+            while (distanceIn < farThreshold) // cât timp mașina este în curs de îndepărtare,
             {
               // vom afișa un mesaj specific pe ecranul LCD
               lcd.clear();
@@ -138,10 +136,6 @@ void loop() {
               Serial.print("Distance IN: ");
               Serial.println(distanceIn);
 
-              if (distanceIn - previousDistance > thresholdDistance) {  // dacă deplasamentul este consistent înseamnă că mașina se îndepărtează cu adevărat
-                movementsCounter--;
-                previousDistance = distanceIn; // distanța curentă devine noul etalon pentru viitoarea măsurătoare
-              }
               delay(400); // verificăm deplasamentul la fiecare 400ms
             }
             // când îndepărtarea s-a finalizat cu succes, pe ecranul LCD revine mesajul inițial
@@ -167,6 +161,49 @@ void loop() {
 
         delay(700);
 
+        // se verifică dacă mașina a trecut și de senzorul de la intrare
+        distanceIn = 50;
+        while(distanceIn > entryDistance)
+        {
+          digitalWrite(trigPinIn, LOW);
+          delayMicroseconds(2);
+          digitalWrite(trigPinIn, HIGH);
+          delayMicroseconds(10);
+          digitalWrite(trigPinIn, LOW);
+
+          durationIn = pulseIn(echoPinIn, HIGH);
+          distanceIn = (durationIn*.0343)/2;
+          Serial.print("Distance IN: ");
+          Serial.println(distanceIn);
+        }
+
+        // începe secvența de verificare a îndepărtării mașinii față de senzorul de la intrare, deoarece el e ultimul pe lângă care trece
+        // algoritmul este identic cu cel aplicat în situația solicitării simultane a barierei
+        // această verificare e necesară deoarece nu ne dorim ca bariera să se ridice prea rapid, creându-se eroarea cum că mașina care tocmai iasă ar dori de fapt să reintre imediat
+        // astfel se generează un delay într-un mod mai dinamic
+        while (distanceIn < farThreshold) // cât timp mașina este în curs de îndepărtare,
+            {
+              // și vom continua cu colectarea distanței curente
+              digitalWrite(trigPinIn, LOW);
+              delayMicroseconds(2);
+              digitalWrite(trigPinIn, HIGH);
+              delayMicroseconds(10);
+              digitalWrite(trigPinIn, LOW);
+
+              durationIn = pulseIn(echoPinIn, HIGH);
+              distanceIn = (durationIn*.0343)/2;
+              Serial.print("Distance IN: ");
+              Serial.println(distanceIn);
+
+              delay(400); // verificăm deplasamentul la fiecare 400ms
+            }
+        // apoi se coboară bariera
+        for (int angle = 90; angle >= 0; angle -= 1) 
+        {
+          servo.write(angle);
+          delay(10);
+        }
+
         // actualizare stare LED-uri
         if(parkingSpots > 0)
         {
@@ -185,68 +222,8 @@ void loop() {
         lcd.setCursor(7,1);
         lcd.print(parkingSpots);
 
-        // se verifică dacă mașina a trecut și de senzorul de la intrare
-        distanceIn = 50;
-        while(distanceIn >= 10)
-        {
-          digitalWrite(trigPinIn, LOW);
-          delayMicroseconds(2);
-          digitalWrite(trigPinIn, HIGH);
-          delayMicroseconds(10);
-          digitalWrite(trigPinIn, LOW);
-
-          durationIn = pulseIn(echoPinIn, HIGH);
-          distanceIn = (durationIn*.0343)/2;
-          Serial.print("Distance IN: ");
-          Serial.println(distanceIn);
-        }
-
-        // apoi se coboară bariera
-        for (int angle = 90; angle >= 0; angle -= 1) 
-        {
-          servo.write(angle);
-          delay(10);
-        }
-
-        // începe secvența de verificare a îndepărtării mașinii față de senzorul de la intrare, deoarece el e ultimul pe lângă care trece
-        // algoritmul este identic cu cel aplicat în situația solicitării simultane a barierei
-        // această verificare e necesară deoarece nu ne dorim ca bariera să se ridice prea rapid, creându-se eroarea cum că mașina care tocmai iasă ar dori de fapt să reintre imediat
-        // astfel se generează un delay într-un mod mai dinamic
-        digitalWrite(trigPinIn, LOW);
-        delayMicroseconds(2);
-        digitalWrite(trigPinIn, HIGH);
-        delayMicroseconds(10);
-        digitalWrite(trigPinIn, LOW);
-
-        durationIn = pulseIn(echoPinIn, HIGH);
-        distanceIn = (durationIn*.0343)/2;
-        Serial.print("Distance IN: ");
-        Serial.println(distanceIn);
-
-        previousDistance = distanceIn;
-        movementsCounter = 5;
-        while(movementsCounter != 0)
-        {
-          digitalWrite(trigPinIn, LOW);
-          delayMicroseconds(2);
-          digitalWrite(trigPinIn, HIGH);
-          delayMicroseconds(10);
-          digitalWrite(trigPinIn, LOW);
-
-          durationIn = pulseIn(echoPinIn, HIGH);
-          distanceIn = (durationIn*.0343)/2;
-          Serial.print("Distance IN: ");
-          Serial.println(distanceIn);
-
-          if(distanceIn - previousDistance > thresholdDistance)
-          {
-            movementsCounter--;
-            previousDistance = distanceIn;
-          }
-          delay(400);
-        }
       }
-      else if(distanceIn < 10) //tratăm cazul în care se dorește intrarea în parcare
+      else if(distanceIn < entryDistance) //tratăm cazul în care se dorește intrarea în parcare
       {
         if(parkingSpots > 0)
         {
@@ -265,7 +242,7 @@ void loop() {
             Serial.print("Distance OUT: ");
             Serial.println(distanceOut);
 
-            if (distanceOut < 10)  // dacă există în același timp o mașină pe partea opusă a barierei,
+            if (distanceOut < entryDistance)  // dacă există în același timp o mașină pe partea opusă a barierei,
             {
               simultan = 1; // atunci setăm variabila "simultan", deoarece ne aflăm într-un caz mai special
               // gestionând intrarea în parcare, ne dorim să prioritizăm mașina ce dorește să iasă pentru a se elibera astfel un loc
@@ -283,9 +260,7 @@ void loop() {
               Serial.print("Distance IN: ");
               Serial.println(distanceIn);
 
-              previousDistance = distanceIn;
-              movementsCounter = 5;
-              while (movementsCounter != 0) 
+              while (distanceIn < farThreshold) 
               {
                 lcd.clear();
                 lcd.print("Va rugam dati cu");
@@ -303,10 +278,6 @@ void loop() {
                 Serial.print("Distance IN: ");
                 Serial.println(distanceIn);
 
-                if (distanceIn - previousDistance > thresholdDistance) {
-                  movementsCounter--;
-                  previousDistance = distanceIn;
-                }
                 delay(400);
               }
               lcd.clear();
@@ -334,6 +305,108 @@ void loop() {
 
           delay(700);
 
+          if(simultan) // dacă am avut de a face cu situația de "simultan", atunci așteptăm ca mașina ce a ieșit să treacă și de senzorul de la intrare
+          {
+            distanceIn = 50;
+            while(distanceIn > entryDistance)
+            {
+              digitalWrite(trigPinIn, LOW);
+              delayMicroseconds(2);
+              digitalWrite(trigPinIn, HIGH);
+              delayMicroseconds(10);
+              digitalWrite(trigPinIn, LOW);
+
+              durationIn = pulseIn(echoPinIn, HIGH);
+              distanceIn = (durationIn*.0343)/2;
+              Serial.print("Distance IN: ");
+              Serial.println(distanceIn);
+            }
+          }
+          else // altfel, așteptăm ca mașina ce a intrat să treacă și de senzorul de la ieșire
+          {
+            distanceOut = 50;
+            while(distanceOut > entryDistance)
+            {
+              digitalWrite(trigPinOut, LOW);
+              delayMicroseconds(2);
+              digitalWrite(trigPinOut, HIGH);
+              delayMicroseconds(10);
+              digitalWrite(trigPinOut, LOW);
+
+              durationOut = pulseIn(echoPinOut, HIGH);
+              distanceOut = (durationOut*.0343)/2;
+              Serial.print("Distance OUT: ");
+              Serial.println(distanceOut);
+            }
+          }
+
+          // similar cu cazul anterior, pentru a nu se ridica bariera prea rapid la venirea unei eventuale viitoare cereri, vom aștepta îndepărtarea mașinii ce a intrat/ieșit
+          if(simultan) // dacă am avut de a face cu situația de "simultan", atunci vom aștepta îndepărtarea mașinii ce a ieșit din parcare
+          {
+            digitalWrite(trigPinIn, LOW);
+            delayMicroseconds(2);
+            digitalWrite(trigPinIn, HIGH);
+            delayMicroseconds(10);
+            digitalWrite(trigPinIn, LOW);
+
+            durationIn = pulseIn(echoPinIn, HIGH);
+            distanceIn = (durationIn*.0343)/2;
+            Serial.print("Distance IN: ");
+            Serial.println(distanceIn);
+
+            while(distanceIn < farThreshold)
+            {
+              digitalWrite(trigPinIn, LOW);
+              delayMicroseconds(2);
+              digitalWrite(trigPinIn, HIGH);
+              delayMicroseconds(10);
+              digitalWrite(trigPinIn, LOW);
+
+              durationIn = pulseIn(echoPinIn, HIGH);
+              distanceIn = (durationIn*.0343)/2;
+              Serial.print("Distance IN: ");
+              Serial.println(distanceIn);
+
+              delay(400);
+            }
+          }
+          else // altfel, vom aștepta îndepărtarea mașinii ce a intrat în parcare
+          {
+            digitalWrite(trigPinOut, LOW);
+            delayMicroseconds(2);
+            digitalWrite(trigPinOut, HIGH);
+            delayMicroseconds(10);
+            digitalWrite(trigPinOut, LOW);
+
+            durationOut = pulseIn(echoPinOut, HIGH);
+            distanceOut = (durationOut*.0343)/2;
+            Serial.print("Distance OUT: ");
+            Serial.println(distanceOut);
+
+            while(distanceOut < farThreshold)
+            {
+              digitalWrite(trigPinOut, LOW);
+              delayMicroseconds(2);
+              digitalWrite(trigPinOut, HIGH);
+              delayMicroseconds(10);
+              digitalWrite(trigPinOut, LOW);
+
+              durationOut = pulseIn(echoPinOut, HIGH);
+              distanceOut = (durationOut*.0343)/2;
+              Serial.print("Distance OUT: ");
+              Serial.println(distanceOut);
+
+              delay(400);
+            }
+          }
+
+          // se coboară bariera
+          for (int angle = 90; angle >= 0; angle -= 1) 
+          {
+            servo.write(angle);
+            delay(10);
+          }
+
           // actualizare stare LED-uri
           if(parkingSpots > 0)
           {
@@ -352,121 +425,6 @@ void loop() {
           lcd.setCursor(7,1);
           lcd.print(parkingSpots);
 
-          if(simultan) // dacă am avut de a face cu situația de "simultan", atunci așteptăm ca mașina ce a ieșit să treacă și de senzorul de la intrare
-          {
-            distanceIn = 50;
-            while(distanceIn >= 10)
-            {
-              digitalWrite(trigPinIn, LOW);
-              delayMicroseconds(2);
-              digitalWrite(trigPinIn, HIGH);
-              delayMicroseconds(10);
-              digitalWrite(trigPinIn, LOW);
-
-              durationIn = pulseIn(echoPinIn, HIGH);
-              distanceIn = (durationIn*.0343)/2;
-              Serial.print("Distance IN: ");
-              Serial.println(distanceIn);
-            }
-          }
-          else // altfel, așteptăm ca mașina ce a intrat să treacă și de senzorul de la ieșire
-          {
-            distanceOut = 50;
-            while(distanceOut >= 10)
-            {
-              digitalWrite(trigPinOut, LOW);
-              delayMicroseconds(2);
-              digitalWrite(trigPinOut, HIGH);
-              delayMicroseconds(10);
-              digitalWrite(trigPinOut, LOW);
-
-              durationOut = pulseIn(echoPinOut, HIGH);
-              distanceOut = (durationOut*.0343)/2;
-              Serial.print("Distance OUT: ");
-              Serial.println(distanceOut);
-            }
-          }
-
-          // se coboară bariera
-          for (int angle = 90; angle >= 0; angle -= 1) 
-          {
-            servo.write(angle);
-            delay(10);
-          }
-
-          // similar cu cazul anterior, pentru a nu se ridica bariera prea rapid la venirea unei eventuale viitoare cereri, vom aștepta îndepărtarea mașinii ce a intrat/ieșit
-          if(simultan) // dacă am avut de a face cu situația de "simultan", atunci vom aștepta îndepărtarea mașinii ce a ieșit din parcare
-          {
-            digitalWrite(trigPinIn, LOW);
-            delayMicroseconds(2);
-            digitalWrite(trigPinIn, HIGH);
-            delayMicroseconds(10);
-            digitalWrite(trigPinIn, LOW);
-
-            durationIn = pulseIn(echoPinIn, HIGH);
-            distanceIn = (durationIn*.0343)/2;
-            Serial.print("Distance IN: ");
-            Serial.println(distanceIn);
-
-            previousDistance = distanceIn;
-            movementsCounter = 5;
-            while(movementsCounter)
-            {
-              digitalWrite(trigPinIn, LOW);
-              delayMicroseconds(2);
-              digitalWrite(trigPinIn, HIGH);
-              delayMicroseconds(10);
-              digitalWrite(trigPinIn, LOW);
-
-              durationIn = pulseIn(echoPinIn, HIGH);
-              distanceIn = (durationIn*.0343)/2;
-              Serial.print("Distance IN: ");
-              Serial.println(distanceIn);
-
-              if(distanceIn - previousDistance > thresholdDistance)
-              {
-                movementsCounter--;
-                previousDistance = distanceIn;
-              }
-              delay(400);
-            }
-          }
-          else // altfel, vom aștepta îndepărtarea mașinii ce a intrat în parcare
-          {
-            digitalWrite(trigPinOut, LOW);
-            delayMicroseconds(2);
-            digitalWrite(trigPinOut, HIGH);
-            delayMicroseconds(10);
-            digitalWrite(trigPinOut, LOW);
-
-            durationOut = pulseIn(echoPinOut, HIGH);
-            distanceOut = (durationOut*.0343)/2;
-            Serial.print("Distance OUT: ");
-            Serial.println(distanceOut);
-
-            previousDistance = distanceOut;
-            movementsCounter = 5;
-            while(movementsCounter)
-            {
-              digitalWrite(trigPinOut, LOW);
-              delayMicroseconds(2);
-              digitalWrite(trigPinOut, HIGH);
-              delayMicroseconds(10);
-              digitalWrite(trigPinOut, LOW);
-
-              durationOut = pulseIn(echoPinOut, HIGH);
-              distanceOut = (durationOut*.0343)/2;
-              Serial.print("Distance OUT: ");
-              Serial.println(distanceOut);
-
-              if(distanceOut - previousDistance > thresholdDistance)
-              {
-                movementsCounter--;
-                previousDistance = distanceOut;
-              }
-              delay(400);
-            }
-          }
         }
       }
     }
