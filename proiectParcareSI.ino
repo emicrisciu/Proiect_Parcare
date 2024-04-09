@@ -1,6 +1,8 @@
-#include <Wire.h> 
-#include <LiquidCrystal_I2C.h>
-#include <Servo.h>
+#include <Wire.h> // bibliotecă ce ne permite să utilizăm modulul I2C
+#include <LiquidCrystal_I2C.h> // biblioteca conține funcțiile clear, print și setCursor utile pentru a reseta ecranul, afișa un text dorit pe ecran și a muta cursorul
+                               // ce indică începutul unei noi porțiuni de text
+#include <Servo.h> // bibliotecă ce ne ajută să lucrăm cu un servomotor și conține funcția write ce ne permite să controlam rotația servomotorului, precum și
+                   // funcția attach ce ne permite să precizăm pinul de pe placă corespunzător pinului PWM al servomotorului
 
 // declarăm pinii digitali 
 const int greenLedPin = 13;
@@ -11,17 +13,16 @@ const int servoPin = 9;
 const int trigPinOut = 7;
 const int echoPinOut = 6;
 
-LiquidCrystal_I2C lcd(0x27, 16, 2); // declarăm o variabilă de tip ecran LCD cu 16 celule și 2 rânduri
-Servo servo;  // declarăm o variabilă de tip Servo
+LiquidCrystal_I2C lcd(0x27, 16, 2); // declarăm un obiect de tip ecran LCD cu 16 celule și 2 rânduri și adresa 0x27
+Servo servo;  // declarăm un obiect de tip Servo
 
 int parkingSpots = 5; // numărul de locuri de parcare prestabilit
-float durationIn, distanceIn; // variabile utilizate pentru a colecta măsuratorile de la senzorii ultrasonici
-float durationOut, distanceOut;
+float durationIn, distanceIn; // variabile utilizate pentru a colecta măsuratorile de la senzorul ultrasonic de la intrarea in parcare
+float durationOut, distanceOut; // variabile utilizate pentru a colecta măsuratorile de la senzorul ultrasonic de la ieșirea din parcare
 int simultan = 0; // flag folosit pentru a indica prezența unei situații când două mașini doresc utilizarea barierei simultan
 
-float thresholdDistance = 1; // distanță în cm ce reprezintă pragul minim de deplasare a unei mașini pentru ca ea să fie considerată o îndepărtare
-int entryDistance = 10;
-int farThreshold = 20;
+int entryDistance = 10; // când o mașină se află la o distanță mai mică decât acest prag față de senzor, atunci este considerată suficient de aproape de barieră pentru a o deschide
+int farThreshold = 20; // când o mașină se află la o distanță mai mare decât acest prag față de senzor, atunci este considerată îndepărtată suficient
 
 // funcția setup, în care se configurează pinii digitali
 void setup() {
@@ -41,12 +42,12 @@ void loop() {
   while(1)
   {
     // controlăm LED-urile
-    if(parkingSpots > 0)
+    if(parkingSpots > 0) // atunci când parcarea mai are locuri libere, LED-ul verde va fi aprins, iar cel roșu stins
     {
       digitalWrite(greenLedPin, HIGH);
       digitalWrite(redLedPin, LOW);
     }
-    else
+    else // atunci când parcarea nu mai are locuri libere, LED-ul roșu va fi aprins, iar cel verde stins
     {
       digitalWrite(greenLedPin, LOW);
       digitalWrite(redLedPin, HIGH);
@@ -60,17 +61,17 @@ void loop() {
 
     // senzorul de la intrarea în parcare ia măsurători
     digitalWrite(trigPinIn, LOW);
-    delayMicroseconds(2);
+    delayMicroseconds(2); // resetăm pinul Trig pe 0 logic pentru 2 microsecunde ca sa ne asiguram ca porneste de pe 0 logic
     digitalWrite(trigPinIn, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(trigPinIn, LOW);
+    delayMicroseconds(10); // setăm pinul Trig pe 1 logic pentru 10 microsecunde pentru ca senzorul să genereze o explozie ultrasonică de 8 cicluri
+    digitalWrite(trigPinIn, LOW); // resetăm pinul Trig pe 0 logic, lucru ce duce la setarea imediată a pinului Echo pe 1 logic
 
-    durationIn = pulseIn(echoPinIn, HIGH);
-    distanceIn = (durationIn*.0343)/2;
+    durationIn = pulseIn(echoPinIn, HIGH); // stocăm rezultatul funcției pulseIn ce ne măsoară timpul în care pinul Echo rămâne pe 1 logic
+    distanceIn = (durationIn*.0343)/2; // calculăm distanța în cm față de obiectul detectat
     Serial.print("Distance IN: ");
     Serial.println(distanceIn);
 
-    // senzorul de la ieșirea din parcare ia măsurători
+    // senzorul de la ieșirea din parcare ia măsurători în mod similar cu cel de la intrare
     digitalWrite(trigPinOut, LOW);
     delayMicroseconds(2);
     digitalWrite(trigPinOut, HIGH);
@@ -104,7 +105,7 @@ void loop() {
 
           if (distanceIn < entryDistance)  // dacă există în același timp o mașină pe partea opusă a barierei,
           {
-            // atunci vom începe secvența de verificare a îndepărtării mașinii de la intrare, calculând distanța la care se află
+            // atunci vom începe secvența de verificare a îndepărtării mașinii de la intrare
             digitalWrite(trigPinIn, LOW);
             delayMicroseconds(2);
             digitalWrite(trigPinIn, HIGH);
@@ -150,7 +151,7 @@ void loop() {
           delay(10); // în cele 700ms de verificare a "conflictului" se interoghează senzorul la fiecare 10ms
         }
 
-        // se ridică bariera
+        // se ridică bariera în mod fluent
         for (int angle = 0; angle <= 90; angle += 1)
         {
           servo.write(angle);
@@ -159,7 +160,7 @@ void loop() {
         
         parkingSpots++; // ieșirea din parcare este în curs deci se incrementează numărul de locuri disponibile
 
-        delay(700);
+        delay(700); // ce făceam cu delayul ăsta? poate îl scoatem când testăm
 
         // se verifică dacă mașina a trecut și de senzorul de la intrare
         distanceIn = 50;
