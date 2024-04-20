@@ -1,8 +1,9 @@
-#include <Wire.h> // bibliotecă ce ne permite să utilizăm modulul I2C
-#include <LiquidCrystal_I2C.h> // biblioteca conține funcțiile clear, print și setCursor utile pentru a reseta ecranul, afișa un text dorit pe ecran și a muta cursorul
-                               // ce indică începutul unei noi porțiuni de text
-#include <Servo.h> // bibliotecă ce ne ajută să lucrăm cu un servomotor și conține funcția write ce ne permite să controlam rotația servomotorului, precum și
-                   // funcția attach ce ne permite să precizăm pinul de pe placă corespunzător pinului PWM al servomotorului
+#include <Wire.h> // bibliotecă (încorporată deja în Arduino IDE) ce ne permite să utilizăm modulul I2C
+#include <LiquidCrystal_I2C.h> // biblioteca conține funcțiile clear, print și setCursor utile pentru a reseta ecranul, afișa un text dorit pe ecran și a muta cursorul ce indică 
+                               // începutul unei noi porțiuni de text
+                               // link preluare bibliotecă: https://robojax.com/learn/arduino/?vid=robojax-LCD1602-I2C
+#include <Servo.h> // bibliotecă (încorporată deja în Arduino IDE) ce ne ajută să lucrăm cu un servomotor și conține funcția write ce ne permite să controlam rotația servomotorului,
+                   //precum și funcția attach ce ne permite să precizăm pinul de pe placă corespunzător pinului PWM al servomotorului
 
 // declarăm pinii digitali 
 const int greenLedPin = 13;
@@ -13,7 +14,7 @@ const int servoPin = 9;
 const int trigPinOut = 7;
 const int echoPinOut = 6;
 
-LiquidCrystal_I2C lcd(0x27, 16, 2); // declarăm un obiect de tip ecran LCD cu 16 celule și 2 rânduri și adresa 0x27
+LiquidCrystal_I2C lcd(0x27, 16, 2); // declarăm un obiect de tip ecran LCD cu 2 rânduri a câte 16 celule și adresa 0x27
 Servo servo;  // declarăm un obiect de tip Servo
 
 int parkingSpots = 5; // numărul de locuri de parcare prestabilit
@@ -31,9 +32,9 @@ void setup() {
   lcd.begin();
   servo.attach(servoPin);
   servo.write(0);
-  pinMode(trigPinIn, OUTPUT);  
+  pinMode(trigPinIn, OUTPUT);
 	pinMode(echoPinIn, INPUT);
-  pinMode(trigPinOut, OUTPUT);  
+  pinMode(trigPinOut, OUTPUT);
 	pinMode(echoPinOut, INPUT);
 	Serial.begin(9600);
 }
@@ -88,7 +89,7 @@ void loop() {
     {
       if(distanceOut < entryDistance) // tratăm cazul în care o mașină dorește să iasă din parcare
       {
-        int time = 10;
+        int time = 0;
         while (time < 700)  // timp de 700ms verificăm dacă pe partea cealaltă nu se dorește simultan intrarea în parcare
         {
           // verificăm distanța calculată de senzorul de la intrarea în parcare
@@ -137,7 +138,7 @@ void loop() {
               Serial.print("Distance IN: ");
               Serial.println(distanceIn);
 
-              delay(400); // verificăm deplasamentul la fiecare 400ms
+              delay(200); // verificăm deplasamentul la fiecare 200ms
             }
             // când îndepărtarea s-a finalizat cu succes, pe ecranul LCD revine mesajul inițial
             lcd.clear();
@@ -147,9 +148,11 @@ void loop() {
             break; // situația de solicitare simultană a barierei a fost rezolvată, așa că se continuă cu ridicarea barierei
           }
 
-          time += 10;
-          delay(10); // în cele 700ms de verificare a "conflictului" se interoghează senzorul la fiecare 10ms
+          time += 70; // time se incrementează cu 70 la fiecare pas, iar cum condiția din while îl limitează la valoarea 700, rezultă că vom face 10 măsurători 
+          delay(70); // iar cele 10 măsurători vor introduce fiecare câte 70ms de întârziere, ceea ce duce la un delay cumulat de 700ms
         }
+
+        delay(300); // pentru a avea o mișcare cât mai realistă a barierei, vom mai aștepta un timp scurt până ridicăm bariera, nu o acționăm instantaneu
 
         // se ridică bariera în mod fluent
         for (int angle = 0; angle <= 90; angle += 1)
@@ -159,8 +162,6 @@ void loop() {
         }
         
         parkingSpots++; // ieșirea din parcare este în curs deci se incrementează numărul de locuri disponibile
-
-        delay(700); // ce făceam cu delayul ăsta? poate îl scoatem când testăm
 
         // se verifică dacă mașina a trecut și de senzorul de la intrare
         distanceIn = 50;
@@ -183,21 +184,24 @@ void loop() {
         // această verificare e necesară deoarece nu ne dorim ca bariera să se ridice prea rapid, creându-se eroarea cum că mașina care tocmai iasă ar dori de fapt să reintre imediat
         // astfel se generează un delay într-un mod mai dinamic
         while (distanceIn < farThreshold) // cât timp mașina este în curs de îndepărtare,
-            {
-              // și vom continua cu colectarea distanței curente
-              digitalWrite(trigPinIn, LOW);
-              delayMicroseconds(2);
-              digitalWrite(trigPinIn, HIGH);
-              delayMicroseconds(10);
-              digitalWrite(trigPinIn, LOW);
+        {
+          // și vom continua cu colectarea distanței curente
+          digitalWrite(trigPinIn, LOW);
+          delayMicroseconds(2);
+          digitalWrite(trigPinIn, HIGH);
+          delayMicroseconds(10);
+          digitalWrite(trigPinIn, LOW);
 
-              durationIn = pulseIn(echoPinIn, HIGH);
-              distanceIn = (durationIn*.0343)/2;
-              Serial.print("Distance IN: ");
-              Serial.println(distanceIn);
+          durationIn = pulseIn(echoPinIn, HIGH);
+          distanceIn = (durationIn*.0343)/2;
+          Serial.print("Distance IN: ");
+          Serial.println(distanceIn);
 
-              delay(400); // verificăm deplasamentul la fiecare 400ms
-            }
+          delay(200); // verificăm deplasamentul la fiecare 200ms
+        }
+
+        delay(300); // se mai așteaptă puțin, tot din motive de realism
+
         // apoi se coboară bariera
         for (int angle = 90; angle >= 0; angle -= 1) 
         {
@@ -228,7 +232,7 @@ void loop() {
       {
         if(parkingSpots > 0)
         {
-          int time = 10;
+          int time = 0;
           while (time < 700)  // timp de 700ms verificăm dacă pe partea cealaltă nu se dorește simultan ieșirea din parcare
           {
             // situația se tratează similar cu cea întâlnită la cazul ieșirii din parcare 
@@ -279,7 +283,7 @@ void loop() {
                 Serial.print("Distance IN: ");
                 Serial.println(distanceIn);
 
-                delay(400);
+                delay(200);
               }
               lcd.clear();
               lcd.print("Locuri neocupate");
@@ -288,9 +292,11 @@ void loop() {
               break; // dacă mașina de la intrare s-a îndepărtat cu succes de barieră înseamnă că putem continua spre ridicarea barierei
             }
             simultan = 0;
-            time += 10;
-            delay(10);
+            time += 70;
+            delay(70);
           }
+
+          delay(300); // pentru a avea o mișcare cât mai realistă a barierei, vom mai aștepta un timp scurt până ridicăm bariera, nu o acționăm instantaneu
 
           // se ridică bariera
           for (int angle = 0; angle <= 90; angle += 1)
@@ -303,8 +309,6 @@ void loop() {
           // în caz contrar, înseamnă că s-a produs o intrare, deci decrementăm numărul de locuri libere
           if(simultan) parkingSpots++;
           else parkingSpots--;
-
-          delay(700);
 
           if(simultan) // dacă am avut de a face cu situația de "simultan", atunci așteptăm ca mașina ce a ieșit să treacă și de senzorul de la intrare
           {
@@ -368,7 +372,7 @@ void loop() {
               Serial.print("Distance IN: ");
               Serial.println(distanceIn);
 
-              delay(400);
+              delay(200);
             }
           }
           else // altfel, vom aștepta îndepărtarea mașinii ce a intrat în parcare
@@ -397,9 +401,11 @@ void loop() {
               Serial.print("Distance OUT: ");
               Serial.println(distanceOut);
 
-              delay(400);
+              delay(200);
             }
           }
+
+          delay(300); // se mai așteaptă puțin, tot din motive de realism
 
           // se coboară bariera
           for (int angle = 90; angle >= 0; angle -= 1) 
